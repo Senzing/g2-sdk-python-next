@@ -8,7 +8,9 @@ TODO: g2engine_abstract.py
 
 import json
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple, cast
+from typing import Any, Dict, Tuple, Union, cast
+
+from .g2engineflags import G2EngineFlags
 
 # Metadata
 
@@ -27,6 +29,8 @@ class G2EngineAbstract(ABC):
     # Messages
     # -------------------------------------------------------------------------
 
+    # TODO: Change to f-strings
+    # Change to be same as g2Product: G2Engine_<method_name()>
     PREFIX = "g2engine."
     ID_MESSAGES = {
         4001: PREFIX + "G2_addRecord({0}, {1}, {2}, {3}) failed. Return code: {4}",
@@ -83,7 +87,9 @@ class G2EngineAbstract(ABC):
         4032: PREFIX
         + "G2_findPathIncludingSourceByRecordID_V2({0}, {1}, {2}, {3} {4}, {5}, {6}, {7}) failed. Return code: {8}",
         4033: PREFIX + "G2_getActiveConfigID() failed. Return code: {0}",
-        4034: PREFIX + "G2_getEntityByEntityID({0}) failed. Return code: {1}",
+        # TODO Modified to reflect V4
+        # 4034: PREFIX + "G2_getEntityByEntityID({0}) failed. Return code: {1}",
+        4034: PREFIX + "G2_getEntityByEntityID({0}, {1}) failed. Return code: {2}",
         4035: PREFIX + "G2_getEntityByEntityID_V2({0}, {1}) failed. Return code: {2}",
         4036: PREFIX + "G2_getEntityByRecordID({0}, {1}) failed. Return code: {2}",
         4037: PREFIX
@@ -131,6 +137,8 @@ class G2EngineAbstract(ABC):
         4073: PREFIX + "G2_whyRecords({0}, {1}, {2}, {3}) failed. Return code: {4}",
         4074: PREFIX
         + "G2_whyRecords_V2({0}, {1}, {2}, {3}, {4}) failed. Return code: {5}",
+        4075: PREFIX
+        + "G2Engine{0}, {1}) failed. module_name and ini_params must both be set or both be empty",
     }
 
     # -------------------------------------------------------------------------
@@ -143,11 +151,27 @@ class G2EngineAbstract(ABC):
         data_source_code: str,
         record_id: str,
         json_data: str,
-        load_id: str,
+        # FIXME load_id is no longer used, being removed from V4 C api?
+        load_id: str = "",
+        with_info: bool = False,
+        flags: int = 0,
         *args: Any,
         **kwargs: Any
-    ) -> None:
+    ) -> Union[None, str]:
         """TODO: document"""
+
+    # @abstractmethod
+    # def add_record(
+    #     self,
+    #     data_source_code: str,
+    #     record_id: str,
+    #     json_data: str,
+    #     # FIXME load_id is no longer used, being removed from V4 C api?
+    #     load_id: None = None,
+    #     *args: Any,
+    #     **kwargs: Any
+    # ) -> None:
+    #     """TODO: document"""
 
     @abstractmethod
     def add_record_with_info(
@@ -155,8 +179,9 @@ class G2EngineAbstract(ABC):
         data_source_code: str,
         record_id: str,
         json_data: str,
-        load_id: str,
-        flags: int,
+        # FIXME load_id is no longer used, being removed from V4 C api?
+        load_id: None = None,
+        flags: int = 0,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -175,7 +200,8 @@ class G2EngineAbstract(ABC):
         self,
         data_source_code: str,
         record_id: str,
-        load_id: str,
+        # FIXME load_id is no longer used, being removed from V4 C api?
+        load_id: None = None,
         *args: Any,
         **kwargs: Any
     ) -> None:
@@ -186,8 +212,9 @@ class G2EngineAbstract(ABC):
         self,
         data_source_code: str,
         record_id: str,
-        load_id: str,
-        flags: int,
+        # FIXME load_id is no longer used, being removed from V4 C api?
+        load_id: None = None,
+        flags: int = 0,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -207,12 +234,21 @@ class G2EngineAbstract(ABC):
 
     @abstractmethod
     def export_csv_entity_report(
-        self, csv_column_list: str, flags: int, *args: Any, **kwargs: Any
+        self,
+        csv_column_list: str,
+        flags: int = G2EngineFlags.G2_EXPORT_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
     ) -> int:
         """TODO: document"""
 
     @abstractmethod
-    def export_json_entity_report(self, flags: int, *args: Any, **kwargs: Any) -> int:
+    def export_json_entity_report(
+        self,
+        flags: int = G2EngineFlags.G2_EXPORT_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
+    ) -> int:
         """TODO: document"""
 
     @abstractmethod
@@ -221,7 +257,7 @@ class G2EngineAbstract(ABC):
 
     @abstractmethod
     def find_interesting_entities_by_entity_id(
-        self, entity_id: int, flags: int, *args: Any, **kwargs: Any
+        self, entity_id: int, flags: int = 0, *args: Any, **kwargs: Any
     ) -> str:
         """TODO: document"""
 
@@ -230,12 +266,13 @@ class G2EngineAbstract(ABC):
         self,
         data_source_code: str,
         record_id: str,
-        flags: int,
+        flags: int = 0,
         *args: Any,
         **kwargs: Any
     ) -> str:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def find_network_by_entity_id_v2(
         self,
@@ -243,7 +280,7 @@ class G2EngineAbstract(ABC):
         max_degree: int,
         build_out_degree: int,
         max_entities: int,
-        flags: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -256,11 +293,13 @@ class G2EngineAbstract(ABC):
         max_degree: int,
         build_out_degree: int,
         max_entities: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def find_network_by_record_id_v2(
         self,
@@ -268,7 +307,7 @@ class G2EngineAbstract(ABC):
         max_degree: int,
         build_out_degree: int,
         max_entities: int,
-        flags: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -281,18 +320,20 @@ class G2EngineAbstract(ABC):
         max_degree: int,
         build_out_degree: int,
         max_entities: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def find_path_by_entity_id_v2(
         self,
         entity_id_1: int,
         entity_id_2: int,
         max_degree: int,
-        flags: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -304,11 +345,13 @@ class G2EngineAbstract(ABC):
         entity_id_1: int,
         entity_id_2: int,
         max_degree: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def find_path_by_record_id_v2(
         self,
@@ -317,7 +360,7 @@ class G2EngineAbstract(ABC):
         data_source_code_2: str,
         record_id_2: str,
         max_degree: int,
-        flags: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -331,11 +374,13 @@ class G2EngineAbstract(ABC):
         data_source_code_2: str,
         record_id_2: str,
         max_degree: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def find_path_excluding_by_entity_id_v2(
         self,
@@ -343,7 +388,7 @@ class G2EngineAbstract(ABC):
         entity_id_2: int,
         max_degree: int,
         excluded_entities: str,
-        flags: str,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -356,11 +401,13 @@ class G2EngineAbstract(ABC):
         entity_id_2: int,
         max_degree: int,
         excluded_entities: str,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def find_path_excluding_by_record_id_v2(
         self,
@@ -370,7 +417,7 @@ class G2EngineAbstract(ABC):
         record_id_2: str,
         max_degree: int,
         excluded_records: str,
-        flags: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -385,11 +432,13 @@ class G2EngineAbstract(ABC):
         record_id_2: str,
         max_degree: int,
         excluded_records: str,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def find_path_including_source_by_entity_id_v2(
         self,
@@ -398,7 +447,7 @@ class G2EngineAbstract(ABC):
         max_degree: int,
         excluded_entities: str,
         required_dsrcs: str,
-        flags: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -412,11 +461,13 @@ class G2EngineAbstract(ABC):
         max_degree: int,
         excluded_entities: str,
         required_dsrcs: str,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def find_path_including_source_by_record_id_v2(
         self,
@@ -427,7 +478,7 @@ class G2EngineAbstract(ABC):
         max_degree: int,
         excluded_records: str,
         required_dsrcs: str,
-        flags: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -443,6 +494,7 @@ class G2EngineAbstract(ABC):
         max_degree: int,
         excluded_records: str,
         required_dsrcs: str,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -452,22 +504,34 @@ class G2EngineAbstract(ABC):
     def get_active_config_id(self, *args: Any, **kwargs: Any) -> int:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def get_entity_by_entity_id_v2(
-        self, entity_id: int, flags: int, *args: Any, **kwargs: Any
+        self,
+        entity_id: int,
+        flags: int = G2EngineFlags.G2_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
     ) -> str:
         """TODO: document"""
 
     @abstractmethod
-    def get_entity_by_entity_id(self, entity_id: int, *args: Any, **kwargs: Any) -> str:
+    def get_entity_by_entity_id(
+        self,
+        entity_id: int,
+        flags: int = G2EngineFlags.G2_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
+    ) -> str:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def get_entity_by_record_id_v2(
         self,
         data_source_code: str,
         record_id: str,
-        flags: int,
+        flags: int = G2EngineFlags.G2_ENTITY_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -475,16 +539,22 @@ class G2EngineAbstract(ABC):
 
     @abstractmethod
     def get_entity_by_record_id(
-        self, data_source_code: str, record_id: str, *args: Any, **kwargs: Any
+        self,
+        data_source_code: str,
+        record_id: str,
+        flags: int = G2EngineFlags.G2_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
     ) -> str:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def get_record_v2(
         self,
         data_source_code: str,
         record_id: str,
-        flags: int,
+        flags: int = G2EngineFlags.G2_RECORD_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -492,7 +562,12 @@ class G2EngineAbstract(ABC):
 
     @abstractmethod
     def get_record(
-        self, data_source_code: str, record_id: str, *args: Any, **kwargs: Any
+        self,
+        data_source_code: str,
+        record_id: str,
+        flags: int = G2EngineFlags.G2_RECORD_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
     ) -> str:
         """TODO: document"""
 
@@ -504,26 +579,46 @@ class G2EngineAbstract(ABC):
     def get_repository_last_modified_time(self, *args: Any, **kwargs: Any) -> int:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def get_virtual_entity_by_record_id_v2(
-        self, record_list: str, flags: int, *args: Any, **kwargs: Any
+        self,
+        record_list: str,
+        flags: int = G2EngineFlags.G2_HOW_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
     ) -> str:
         """TODO: document"""
 
     @abstractmethod
     def get_virtual_entity_by_record_id(
-        self, record_list: str, *args: Any, **kwargs: Any
+        self,
+        record_list: str,
+        flags: int = G2EngineFlags.G2_HOW_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
     ) -> str:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def how_entity_by_entity_id_v2(
-        self, entity_id: int, flags: int, *args: Any, **kwargs: Any
+        self,
+        entity_id: int,
+        flags: int = G2EngineFlags.G2_HOW_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
     ) -> str:
         """TODO: document"""
 
     @abstractmethod
-    def how_entity_by_entity_id(self, entity_id: int, *args: Any, **kwargs: Any) -> str:
+    def how_entity_by_entity_id(
+        self,
+        entity_id: int,
+        flags: int = G2EngineFlags.G2_HOW_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
+    ) -> str:
         """TODO: document"""
 
     @abstractmethod
@@ -563,13 +658,13 @@ class G2EngineAbstract(ABC):
 
     @abstractmethod
     def reevaluate_entity(
-        self, entity_id: int, flags: int, *args: Any, **kwargs: Any
+        self, entity_id: int, flags: int = 0, *args: Any, **kwargs: Any
     ) -> None:
         """TODO: document"""
 
     @abstractmethod
     def reevaluate_entity_with_info(
-        self, entity_id: int, flags: int, *args: Any, **kwargs: Any
+        self, entity_id: int, flags: int = 0, *args: Any, **kwargs: Any
     ) -> str:
         """TODO: document"""
 
@@ -578,7 +673,7 @@ class G2EngineAbstract(ABC):
         self,
         data_source_code: str,
         record_id: str,
-        flags: int,
+        flags: int = 0,
         *args: Any,
         **kwargs: Any
     ) -> None:
@@ -589,7 +684,7 @@ class G2EngineAbstract(ABC):
         self,
         data_source_code: str,
         record_id: str,
-        flags: int,
+        flags: int = 0,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -605,7 +700,8 @@ class G2EngineAbstract(ABC):
         data_source_code: str,
         record_id: str,
         json_data: str,
-        load_id: str,
+        # FIXME load_id is no longer used, being removed from V4 C api?
+        load_id: None = None,
         *args: Any,
         **kwargs: Any
     ) -> None:
@@ -617,21 +713,45 @@ class G2EngineAbstract(ABC):
         data_source_code: str,
         record_id: str,
         json_data: str,
-        load_id: str,
-        flags: int,
+        # FIXME load_id is no longer used, being removed from V4 C api?
+        load_id: None = None,
+        flags: int = 0,
+        *args: Any,
+        **kwargs: Any
+    ) -> str:
+        """TODO: document"""
+
+    # FIXME This should be going away in V4?
+    @abstractmethod
+    def search_by_attributes_v2(
+        self,
+        json_data: str,
+        flags: int = G2EngineFlags.G2_SEARCH_BY_ATTRIBUTES_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
+    ) -> str:
+        """TODO: document"""
+
+    # FIXME This should be going away in V4?
+    @abstractmethod
+    def search_by_attributes_v3(
+        self,
+        json_data: str,
+        search_profile: str,
+        flags: int = G2EngineFlags.G2_SEARCH_BY_ATTRIBUTES_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
         """TODO: document"""
 
     @abstractmethod
-    def search_by_attributes_v2(
-        self, json_data: str, flags: int, *args: Any, **kwargs: Any
+    def search_by_attributes(
+        self,
+        json_data: str,
+        flags: int = G2EngineFlags.G2_SEARCH_BY_ATTRIBUTES_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
     ) -> str:
-        """TODO: document"""
-
-    @abstractmethod
-    def search_by_attributes(self, json_data: str, *args: Any, **kwargs: Any) -> str:
         """TODO: document"""
 
     @abstractmethod
@@ -640,32 +760,54 @@ class G2EngineAbstract(ABC):
 
     @abstractmethod
     def why_entities_v2(
-        self, entity_id_1: int, entity_id_2: int, flags: int, *args: Any, **kwargs: Any
+        self,
+        entity_id_1: int,
+        entity_id_2: int,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
     ) -> str:
         """TODO: document"""
 
     @abstractmethod
     def why_entities(
-        self, entity_id_1: int, entity_id_2: int, *args: Any, **kwargs: Any
+        self,
+        entity_id_1: int,
+        entity_id_2: int,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
     ) -> str:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def why_entity_by_entity_id_v2(
-        self, entity_id: str, flags: int, *args: Any, **kwargs: Any
+        self,
+        entity_id: str,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
     ) -> str:
         """TODO: document"""
 
     @abstractmethod
-    def why_entity_by_entity_id(self, entity_id: int, *args: Any, **kwargs: Any) -> str:
+    def why_entity_by_entity_id(
+        self,
+        entity_id: int,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
+    ) -> str:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def why_entity_by_record_id_v2(
         self,
         data_source_code: str,
         record_id: str,
-        flags: int,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -673,10 +815,16 @@ class G2EngineAbstract(ABC):
 
     @abstractmethod
     def why_entity_by_record_id(
-        self, data_source_code: str, record_id: str, *args: Any, **kwargs: Any
+        self,
+        data_source_code: str,
+        record_id: str,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
     ) -> str:
         """TODO: document"""
 
+    # FIXME This should be going away in V4?
     @abstractmethod
     def why_records_v2(
         self,
@@ -684,7 +832,7 @@ class G2EngineAbstract(ABC):
         record_id_1: str,
         data_source_code_2: str,
         record_id_2: str,
-        flags: int,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
@@ -697,20 +845,31 @@ class G2EngineAbstract(ABC):
         record_id_1: str,
         data_source_code_2: str,
         record_id_2: str,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any
     ) -> str:
         """TODO: document"""
+
+    # RODO Is why_record_in_entity missing?
 
     # -------------------------------------------------------------------------
     # Convenience methods
     # -------------------------------------------------------------------------
 
     def get_record_as_dict(
-        self, data_source_code: str, record_id: str, *args: Any, **kwargs: Any
+        # self, data_source_code: str, record_id: str, *args: Any, **kwargs: Any
+        self,
+        data_source_code: str,
+        record_id: str,
+        flags: int = G2EngineFlags.G2_RECORD_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any
     ) -> Dict[str, Any]:
         """TODO: document"""
         return cast(
             Dict[str, Any],
-            json.loads(self.get_record(data_source_code, record_id, args, kwargs)),
+            json.loads(
+                self.get_record(data_source_code, record_id, flags, args, kwargs)
+            ),
         )

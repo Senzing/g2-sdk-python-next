@@ -4,6 +4,7 @@ It is a wrapper over Senzing's G2Engine C binding.
 It conforms to the interface specified in
 `g2engine_abstract.py <https://github.com/Senzing/g2-sdk-python-next/blob/main/src/senzing/g2engine_abstract.py>`_
 
+# TODO: Also pythonpath and engine vars?
 To use g2engine,
 the **LD_LIBRARY_PATH** environment variable must include a path to Senzing's libraries.
 
@@ -17,7 +18,7 @@ Example:
 # pylint: disable=R0903,C0302,R0915
 
 import os
-from ctypes import (
+from ctypes import (  # cast,
     POINTER,
     Structure,
     c_char,
@@ -29,11 +30,21 @@ from ctypes import (
     c_void_p,
     cdll,
 )
-from typing import Any, Tuple
+from typing import Any, Tuple, Union
 
 from .g2engine_abstract import G2EngineAbstract
+from .g2engineflags import G2EngineFlags
 from .g2exception import G2Exception, new_g2exception
-from .g2helpers import find_file_in_path
+from .g2helpers import (
+    as_c_char_p,
+    as_c_int,
+    as_python_int,
+    as_python_str,
+    as_uintptr_t,
+    find_file_in_path,
+)
+
+# FIXME
 from .g2version import is_supported_senzingapi_version
 
 # Metadata
@@ -60,8 +71,13 @@ class G2ResponseReturnCodeResult(Structure):
     ]
 
 
-class G2AddRecordWithInfoResult(G2ResponseReturnCodeResult):
+class G2AddRecordWithInfoResult(Structure):
     """In golang_helpers.h G2_addRecordWithInfo_result"""
+
+    _fields_ = [
+        ("response", POINTER(c_char)),
+        ("return_code", c_longlong),
+    ]
 
 
 class G2DeleteRecordWithInfoResult(G2ResponseReturnCodeResult):
@@ -78,8 +94,13 @@ class G2ExportConfigAndConfigIDResult(Structure):
     ]
 
 
-class G2ExportConfigResult(G2ResponseReturnCodeResult):
+class G2ExportConfigResult(Structure):
     """In golang_helpers.h G2_exportConfig_result"""
+
+    _fields_ = [
+        ("response", POINTER(c_char)),
+        ("return_code", c_longlong),
+    ]
 
 
 class G2ExportCSVEntityReportResult(Structure):
@@ -180,13 +201,18 @@ class G2GetActiveConfigIDResult(Structure):
     """In golang_helpers.h G2_getActiveConfigID_result"""
 
     _fields_ = [
-        ("config_id", c_longlong),
+        ("response", c_longlong),
         ("return_code", c_longlong),
     ]
 
 
-class G2GetEntityByEntityIDResult(G2ResponseReturnCodeResult):
+class G2GetEntityByEntityIDResult(Structure):
     """In golang_helpers.h G2_getEntityByEntityID_result"""
+
+    _fields_ = [
+        ("response", c_char_p),
+        ("return_code", c_longlong),
+    ]
 
 
 class G2GetEntityByEntityIDV2Result(G2ResponseReturnCodeResult):
@@ -201,8 +227,13 @@ class G2GetEntityByRecordIDV2Result(G2ResponseReturnCodeResult):
     """In golang_helpers.h G2_getEntityByRecordID_V2_result"""
 
 
-class G2GetRecordResult(G2ResponseReturnCodeResult):
+class G2GetRecordResult(Structure):
     """In golang_helpers.h G2_getRecord_result"""
+
+    _fields_ = [
+        ("response", POINTER(c_char)),
+        ("return_code", c_longlong),
+    ]
 
 
 class G2GetRecordV2Result(G2ResponseReturnCodeResult):
@@ -262,8 +293,13 @@ class G2SearchByAttributesV2Result(G2ResponseReturnCodeResult):
     """In golang_helpers.h G2_searchByAttributes_V2_result"""
 
 
-class G2StatsResult(G2ResponseReturnCodeResult):
+class G2StatsResult(Structure):
     """In golang_helpers.h G2_stats_result"""
+
+    _fields_ = [
+        ("response", POINTER(c_char)),
+        ("return_code", c_longlong),
+    ]
 
 
 class G2WhyEntitiesResult(G2ResponseReturnCodeResult):
@@ -370,20 +406,25 @@ class G2Engine(G2EngineAbstract):
         """
         # pylint: disable=W0613
 
-        # Verify parameters.
-
-        if (len(module_name) == 0) or (len(ini_params) == 0):
-            if len(module_name) + len(ini_params) != 0:
-                raise self.new_exception(9999, module_name, ini_params)
-
+        self.auto_init = True if len(module_name) > 0 else False
         self.ini_params = ini_params
         self.module_name = module_name
         self.init_config_id = init_config_id
         self.noop = ""
         self.verbose_logging = verbose_logging
 
+        # if len(module_name) > 0:
+        #     self.auto_init = True
+
+        # Verify parameters.
+
+        if (len(module_name) == 0) or (len(ini_params) == 0):
+            if len(module_name) + len(ini_params) != 0:
+                raise self.new_exception(4075, module_name, ini_params)
+
         # Determine if Senzing API version is acceptable.
 
+        # FIXME
         is_supported_senzingapi_version()
 
         # Load binary library.
@@ -408,6 +449,7 @@ class G2Engine(G2EngineAbstract):
         self.library_handle.G2_addRecord.restype = c_int
         # self.library_handle.G2_addRecordWithInfo.argtypes = [c_char_p, c_char_p, c_char_p, c_char_p, c_longlong, POINTER(c_char_p), POINTER(c_size_t), self._resize_func_def]
         self.library_handle.G2_addRecordWithInfo_helper.argtypes = [
+            c_char_p,
             c_char_p,
             c_char_p,
             c_char_p,
@@ -438,6 +480,8 @@ class G2Engine(G2EngineAbstract):
         self.library_handle.G2_deleteRecordWithInfo_helper.restype = (
             G2DeleteRecordWithInfoResult
         )
+        self.library_handle.G2_destroy.argtypes = []
+        self.library_handle.G2_destroy.restype = c_longlong
         # self.library_handle.G2_exportConfig.argtypes = [POINTER(c_char_p), POINTER(c_size_t), self._resize_func_def]
         self.library_handle.G2_exportConfig_helper.argtypes = []
         self.library_handle.G2_exportConfig_helper.restype = G2ExportConfigResult
@@ -670,7 +714,10 @@ class G2Engine(G2EngineAbstract):
         self.library_handle.G2_getActiveConfigID_helper.restype = (
             G2GetActiveConfigIDResult
         )
-        self.library_handle.G2_getEntityByEntityID_helper.argtypes = [c_longlong]
+        self.library_handle.G2_getEntityByEntityID_helper.argtypes = [
+            c_longlong,
+            c_longlong,
+        ]
         self.library_handle.G2_getEntityByEntityID_helper.restype = (
             G2GetEntityByEntityIDResult
         )
@@ -881,13 +928,13 @@ class G2Engine(G2EngineAbstract):
         self.library_handle.G2GoHelper_free.argtypes = [c_char_p]
 
         # Initialize Senzing engine.
-
-        if len(module_name) > 0:
+        if self.auto_init:
             self.init(self.module_name, self.ini_params, self.verbose_logging)
 
     def __del__(self) -> None:
         """Destructor"""
-        self.destroy()
+        if self.auto_init:
+            self.destroy()
 
     # -------------------------------------------------------------------------
     # Development methods - to be removed after initial development
@@ -926,53 +973,116 @@ class G2Engine(G2EngineAbstract):
     # G2Engine methods
     # -------------------------------------------------------------------------
 
+    # def add_record(
+    #     self,
+    #     data_source_code: str,
+    #     record_id: str,
+    #     json_data: str,
+    #     # FIXME load_id is no longer used, being removed from V4 C api?
+    #     load_id: None = None,
+    #     *args: Any,
+    #     **kwargs: Any,
+    # ) -> None:
+    #     self.fake_g2engine(data_source_code, record_id, json_data, load_id)
+
     def add_record(
         self,
         data_source_code: str,
         record_id: str,
         json_data: str,
-        load_id: str,
+        # FIXME load_id is no longer used, being removed from V4 C api?
+        load_id: str = "",
+        with_info: bool = False,
+        flags: int = 0,
         *args: Any,
         **kwargs: Any,
-    ) -> None:
-        self.fake_g2engine(data_source_code, record_id, json_data, load_id)
+        # ) -> None:
+    ) -> Union[None, str]:
+        if not with_info:
+            result = self.library_handle.G2_addRecord(
+                as_c_char_p(data_source_code),
+                as_c_char_p(record_id),
+                as_c_char_p(json_data),
+                as_c_char_p(load_id),
+            )
+            if result != 0:
+                raise self.new_exception(
+                    4001,
+                    data_source_code,
+                    record_id,
+                    json_data,
+                    load_id,
+                    result.return_code,
+                )
+            return None
+
+        else:
+            result = self.library_handle.G2_addRecordWithInfo_helper(
+                as_c_char_p(data_source_code),
+                as_c_char_p(record_id),
+                as_c_char_p(json_data),
+                as_c_char_p(load_id),
+                as_c_int(flags),
+            )
+
+            try:
+                if result.return_code != 0:
+                    raise self.new_exception(
+                        4002,
+                        data_source_code,
+                        record_id,
+                        json_data,
+                        load_id,
+                        flags,
+                        result.return_code,
+                    )
+                result_response = as_python_str(result.response)
+
+            finally:
+                self.library_handle.G2GoHelper_free(result.response)
+            return result_response
 
     def add_record_with_info(
         self,
         data_source_code: str,
         record_id: str,
         json_data: str,
-        load_id: str,
-        flags: int,
+        # FIXME load_id is no longer used, being removed from V4 C api?
+        load_id: None = None,
+        flags: int = 0,
         *args: Any,
         **kwargs: Any,
     ) -> str:
         self.fake_g2engine(data_source_code, record_id, json_data, load_id, flags)
         return "string"
 
+    # TODO Is add_record_with_retruned_record_id missing? Check Go
+
     def close_export(self, response_handle: int, *args: Any, **kwargs: Any) -> None:
         self.fake_g2engine(response_handle)
 
     def count_redo_records(self, *args: Any, **kwargs: Any) -> int:
-        self.fake_g2engine()
-        return 0
+        return as_python_int(self.library_handle.G2_countRedoRecords())
 
     def delete_record(
         self,
         data_source_code: str,
         record_id: str,
-        load_id: str,
+        # FIXME load_id is no longer used, being removed from V4 C api?
+        load_id: None = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
-        self.fake_g2engine(data_source_code, record_id, load_id)
+        # self.fake_g2engine(data_source_code, record_id, load_id)
+        self.fake_g2engine(data_source_code, record_id)
 
     def delete_record_with_info(
         self,
         data_source_code: str,
         record_id: str,
-        load_id: str,
-        flags: int,
+        # FIXME load_id is no longer used, being removed from V4 C api?
+        load_id: None = None,
+        flags: int = 0,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -980,23 +1090,47 @@ class G2Engine(G2EngineAbstract):
         return "string"
 
     def destroy(self, *args: Any, **kwargs: Any) -> None:
-        self.fake_g2engine()
+        result = self.library_handle.G2_destroy()
+        if result != 0:
+            raise self.new_exception(4009, result)
 
     def export_config(self, *args: Any, **kwargs: Any) -> str:
-        self.fake_g2engine()
-        return "string"
+        result = self.library_handle.G2_exportConfig_helper()
+        try:
+            if result.return_code != 0:
+                raise self.new_exception(4011, result.return_code)
+            result_response = as_python_str(result.response)
+        finally:
+            self.library_handle.G2GoHelper_free(result.response)
+        return result_response
 
     def export_config_and_config_id(self, *args: Any, **kwargs: Any) -> Tuple[str, int]:
-        self.fake_g2engine()
-        return "string", 0
+        result = self.library_handle.G2_exportConfigAndConfigID_helper()
+        try:
+            if result.return_code != 0:
+                raise self.new_exception(4010, result.return_code)
+            config = as_python_str(result.config)
+            config_id = as_python_int(result.config_id)
+        finally:
+            self.library_handle.G2GoHelper_free(result.config)
+        return config, config_id
 
     def export_csv_entity_report(
-        self, csv_column_list: str, flags: int, *args: Any, **kwargs: Any
+        self,
+        csv_column_list: str,
+        flags: int = G2EngineFlags.G2_EXPORT_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
     ) -> int:
         self.fake_g2engine(csv_column_list, flags)
         return 0
 
-    def export_json_entity_report(self, flags: int, *args: Any, **kwargs: Any) -> int:
+    def export_json_entity_report(
+        self,
+        flags: int = G2EngineFlags.G2_EXPORT_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
+    ) -> int:
         self.fake_g2engine(flags)
         return 0
 
@@ -1005,7 +1139,7 @@ class G2Engine(G2EngineAbstract):
         return "string"
 
     def find_interesting_entities_by_entity_id(
-        self, entity_id: int, flags: int, *args: Any, **kwargs: Any
+        self, entity_id: int, flags: int = 0, *args: Any, **kwargs: Any
     ) -> str:
         self.fake_g2engine(entity_id, flags)
         return "string"
@@ -1014,20 +1148,21 @@ class G2Engine(G2EngineAbstract):
         self,
         data_source_code: str,
         record_id: str,
-        flags: int,
+        flags: int = 0,
         *args: Any,
         **kwargs: Any,
     ) -> str:
         self.fake_g2engine(data_source_code, record_id, flags)
         return "string"
 
+    # FIXME This should be going away in V4?
     def find_network_by_entity_id_v2(
         self,
         entity_list: str,
         max_degree: int,
         build_out_degree: int,
         max_entities: int,
-        flags: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1042,19 +1177,21 @@ class G2Engine(G2EngineAbstract):
         max_degree: int,
         build_out_degree: int,
         max_entities: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
         self.fake_g2engine(entity_list, max_degree, build_out_degree, max_entities)
         return "string"
 
+    # FIXME This should be going away in V4?
     def find_network_by_record_id_v2(
         self,
         record_list: str,
         max_degree: int,
         build_out_degree: int,
         max_entities: int,
-        flags: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1069,18 +1206,20 @@ class G2Engine(G2EngineAbstract):
         max_degree: int,
         build_out_degree: int,
         max_entities: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
         self.fake_g2engine(record_list, max_degree, build_out_degree, max_entities)
         return "string"
 
+    # FIXME This should be going away in V4?
     def find_path_by_entity_id_v2(
         self,
         entity_id_1: int,
         entity_id_2: int,
         max_degree: int,
-        flags: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1092,12 +1231,14 @@ class G2Engine(G2EngineAbstract):
         entity_id_1: int,
         entity_id_2: int,
         max_degree: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
         self.fake_g2engine(entity_id_1, entity_id_2, max_degree)
         return "string"
 
+    # FIXME This should be going away in V4?
     def find_path_by_record_id_v2(
         self,
         data_source_code_1: str,
@@ -1105,7 +1246,7 @@ class G2Engine(G2EngineAbstract):
         data_source_code_2: str,
         record_id_2: str,
         max_degree: int,
-        flags: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1126,6 +1267,7 @@ class G2Engine(G2EngineAbstract):
         data_source_code_2: str,
         record_id_2: str,
         max_degree: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1134,13 +1276,14 @@ class G2Engine(G2EngineAbstract):
         )
         return "string"
 
+    # FIXME This should be going away in V4?
     def find_path_excluding_by_entity_id_v2(
         self,
         entity_id_1: int,
         entity_id_2: int,
         max_degree: int,
         excluded_entities: str,
-        flags: str,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1155,12 +1298,16 @@ class G2Engine(G2EngineAbstract):
         entity_id_2: int,
         max_degree: int,
         excluded_entities: str,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
-        self.fake_g2engine(entity_id_1, entity_id_2, max_degree, excluded_entities)
+        self.fake_g2engine(
+            entity_id_1, entity_id_2, max_degree, excluded_entities, flags
+        )
         return "string"
 
+    # FIXME This should be going away in V4?
     def find_path_excluding_by_record_id_v2(
         self,
         data_source_code_1: str,
@@ -1169,7 +1316,7 @@ class G2Engine(G2EngineAbstract):
         record_id_2: str,
         max_degree: int,
         excluded_records: str,
-        flags: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1192,6 +1339,7 @@ class G2Engine(G2EngineAbstract):
         record_id_2: str,
         max_degree: int,
         excluded_records: str,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1202,9 +1350,11 @@ class G2Engine(G2EngineAbstract):
             record_id_2,
             max_degree,
             excluded_records,
+            flags,
         )
         return "string"
 
+    # FIXME This should be going away in V4?
     def find_path_including_source_by_entity_id_v2(
         self,
         entity_id_1: int,
@@ -1212,7 +1362,7 @@ class G2Engine(G2EngineAbstract):
         max_degree: int,
         excluded_entities: str,
         required_dsrcs: str,
-        flags: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1233,14 +1383,21 @@ class G2Engine(G2EngineAbstract):
         max_degree: int,
         excluded_entities: str,
         required_dsrcs: str,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
         self.fake_g2engine(
-            entity_id_1, entity_id_2, max_degree, excluded_entities, required_dsrcs
+            entity_id_1,
+            entity_id_2,
+            max_degree,
+            excluded_entities,
+            required_dsrcs,
+            flags,
         )
         return "string"
 
+    # FIXME This should be going away in V4?
     def find_path_including_source_by_record_id_v2(
         self,
         data_source_code_1: str,
@@ -1250,7 +1407,7 @@ class G2Engine(G2EngineAbstract):
         max_degree: int,
         excluded_records: str,
         required_dsrcs: str,
-        flags: int,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1275,6 +1432,7 @@ class G2Engine(G2EngineAbstract):
         max_degree: int,
         excluded_records: str,
         required_dsrcs: str,
+        flags: int = G2EngineFlags.G2_FIND_PATH_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1286,28 +1444,52 @@ class G2Engine(G2EngineAbstract):
             max_degree,
             excluded_records,
             required_dsrcs,
+            flags,
         )
         return "string"
 
     def get_active_config_id(self, *args: Any, **kwargs: Any) -> int:
-        self.fake_g2engine()
-        return 0
+        result = self.library_handle.G2_getActiveConfigID_helper()
+        if result.return_code != 0:
+            raise self.new_exception(4033, result.return_code)
+        return as_python_int(result.response)
 
+    # FIXME This should be going away in V4?
     def get_entity_by_entity_id_v2(
-        self, entity_id: int, flags: int, *args: Any, **kwargs: Any
+        self,
+        entity_id: int,
+        flags: int = G2EngineFlags.G2_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
     ) -> str:
         self.fake_g2engine(entity_id, flags)
         return "string"
 
-    def get_entity_by_entity_id(self, entity_id: int, *args: Any, **kwargs: Any) -> str:
-        self.fake_g2engine(entity_id)
-        return "string"
+    def get_entity_by_entity_id(
+        self,
+        entity_id: int,
+        flags: int = G2EngineFlags.G2_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
+    ) -> str:
+        # TODO Remove V2 for V4
+        result = self.library_handle.G2_getEntityByEntityID_V2_helper(
+            as_c_int(entity_id), as_c_int(flags)
+        )
+        try:
+            if result.return_code != 0:
+                raise self.new_exception(4034, entity_id, flags, result.return_code)
+            result_response = as_python_str(result.response)
+        finally:
+            self.library_handle.G2GoHelper_free(result.response)
+        return result_response
 
+    # FIXME This should be going away in V4?
     def get_entity_by_record_id_v2(
         self,
         data_source_code: str,
         record_id: str,
-        flags: int,
+        flags: int = G2EngineFlags.G2_ENTITY_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1315,16 +1497,22 @@ class G2Engine(G2EngineAbstract):
         return "string"
 
     def get_entity_by_record_id(
-        self, data_source_code: str, record_id: str, *args: Any, **kwargs: Any
+        self,
+        data_source_code: str,
+        record_id: str,
+        flags: int = G2EngineFlags.G2_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
     ) -> str:
-        self.fake_g2engine(data_source_code, record_id)
+        self.fake_g2engine(data_source_code, record_id, flags)
         return "string"
 
+    # FIXME This should be going away in V4?
     def get_record_v2(
         self,
         data_source_code: str,
         record_id: str,
-        flags: int,
+        flags: int = G2EngineFlags.G2_RECORD_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1332,10 +1520,25 @@ class G2Engine(G2EngineAbstract):
         return "string"
 
     def get_record(
-        self, data_source_code: str, record_id: str, *args: Any, **kwargs: Any
+        self,
+        data_source_code: str,
+        record_id: str,
+        flags: int = G2EngineFlags.G2_RECORD_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
     ) -> str:
-        self.fake_g2engine(data_source_code, record_id)
-        return "string"
+        result = self.library_handle.G2_getRecord_helper(
+            as_c_char_p(data_source_code),
+            as_c_char_p(record_id),
+            as_uintptr_t(flags),
+        )
+        try:
+            if result.return_code != 0:
+                raise self.new_exception(4039, result.return_code)
+            result_response = as_python_str(result.response)
+        finally:
+            self.library_handle.G2GoHelper_free(result.response)
+        return result_response
 
     def get_redo_record(self, *args: Any, **kwargs: Any) -> str:
         self.fake_g2engine()
@@ -1345,26 +1548,46 @@ class G2Engine(G2EngineAbstract):
         self.fake_g2engine()
         return 0
 
+    # FIXME This should be going away in V4?
     def get_virtual_entity_by_record_id_v2(
-        self, record_list: str, flags: int, *args: Any, **kwargs: Any
+        self,
+        record_list: str,
+        flags: int = G2EngineFlags.G2_HOW_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
     ) -> str:
         self.fake_g2engine(record_list, flags)
         return "string"
 
     def get_virtual_entity_by_record_id(
-        self, record_list: str, *args: Any, **kwargs: Any
+        self,
+        record_list: str,
+        flags: int = G2EngineFlags.G2_HOW_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
     ) -> str:
-        self.fake_g2engine(record_list)
+        self.fake_g2engine(record_list, flags)
         return "string"
 
+    # FIXME This should be going away in V4?
     def how_entity_by_entity_id_v2(
-        self, entity_id: int, flags: int, *args: Any, **kwargs: Any
+        self,
+        entity_id: int,
+        flags: int = G2EngineFlags.G2_HOW_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
     ) -> str:
         self.fake_g2engine(entity_id, flags)
         return "string"
 
-    def how_entity_by_entity_id(self, entity_id: int, *args: Any, **kwargs: Any) -> str:
-        self.fake_g2engine(entity_id)
+    def how_entity_by_entity_id(
+        self,
+        entity_id: int,
+        flags: int = G2EngineFlags.G2_HOW_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
+    ) -> str:
+        self.fake_g2engine(entity_id, flags)
         return "string"
 
     def init(
@@ -1374,7 +1597,15 @@ class G2Engine(G2EngineAbstract):
         verbose_logging: int = 0,
         **kwargs: Any,
     ) -> None:
-        self.fake_g2engine(module_name, ini_params, verbose_logging)
+        result = self.library_handle.G2_init(
+            as_c_char_p(module_name),
+            as_c_char_p(ini_params),
+            as_c_int(verbose_logging),
+        )
+        if result < 0:
+            raise self.new_exception(
+                4047, module_name, ini_params, verbose_logging, result
+            )
 
     def init_with_config_id(
         self,
@@ -1393,21 +1624,23 @@ class G2Engine(G2EngineAbstract):
         self.fake_g2engine(record)
 
     def process_with_info(
-        self, record: str, flags: int, *args: Any, **kwargs: Any
+        self, record: str, flags: int = 0, *args: Any, **kwargs: Any
     ) -> str:
         self.fake_g2engine(record, flags)
         return "string"
 
     def purge_repository(self, *args: Any, **kwargs: Any) -> None:
-        self.fake_g2engine()
+        result = self.library_handle.G2_purgeRepository()
+        if result != 0:
+            raise self.new_exception(4056)
 
     def reevaluate_entity(
-        self, entity_id: int, flags: int, *args: Any, **kwargs: Any
+        self, entity_id: int, flags: int = 0, *args: Any, **kwargs: Any
     ) -> None:
         self.fake_g2engine(entity_id, flags)
 
     def reevaluate_entity_with_info(
-        self, entity_id: int, flags: int, *args: Any, **kwargs: Any
+        self, entity_id: int, flags: int = 0, *args: Any, **kwargs: Any
     ) -> str:
         self.fake_g2engine(entity_id, flags)
         return "string"
@@ -1416,7 +1649,7 @@ class G2Engine(G2EngineAbstract):
         self,
         data_source_code: str,
         record_id: str,
-        flags: int,
+        flags: int = 0,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -1426,7 +1659,7 @@ class G2Engine(G2EngineAbstract):
         self,
         data_source_code: str,
         record_id: str,
-        flags: int,
+        flags: int = 0,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1441,66 +1674,123 @@ class G2Engine(G2EngineAbstract):
         data_source_code: str,
         record_id: str,
         json_data: str,
-        load_id: str,
+        # FIXME load_id is no longer used, being removed from V4 C api?
+        load_id: None = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
-        self.fake_g2engine(data_source_code, record_id, json_data, load_id)
+        self.fake_g2engine(data_source_code, record_id, json_data)
 
     def replace_record_with_info(
         self,
         data_source_code: str,
         record_id: str,
         json_data: str,
-        load_id: str,
-        flags: int,
+        # FIXME load_id is no longer used, being removed from V4 C api?
+        load_id: None = None,
+        flags: int = 0,
         *args: Any,
         **kwargs: Any,
     ) -> str:
         self.fake_g2engine(data_source_code, record_id, json_data, load_id, flags)
         return "string"
 
+    # FIXME This should be going away in V4?
     def search_by_attributes_v2(
-        self, json_data: str, flags: int, *args: Any, **kwargs: Any
+        self,
+        json_data: str,
+        flags: int = G2EngineFlags.G2_SEARCH_BY_ATTRIBUTES_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
     ) -> str:
         self.fake_g2engine(json_data, flags)
         return "string"
 
-    def search_by_attributes(self, json_data: str, *args: Any, **kwargs: Any) -> str:
-        self.fake_g2engine(json_data)
+    # FIXME This should be going away in V4?
+    def search_by_attributes_v3(
+        self,
+        json_data: str,
+        search_profile: str,
+        # TODO Does the abstract signature also need any defaults?
+        flags: int = G2EngineFlags.G2_SEARCH_BY_ATTRIBUTES_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
+    ) -> str:
+        self.fake_g2engine(json_data, search_profile, flags)
+        return "string"
+
+    # TODO Is search_by_attributes_v3 missing?
+
+    def search_by_attributes(
+        self,
+        json_data: str,
+        flags: int = G2EngineFlags.G2_SEARCH_BY_ATTRIBUTES_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
+    ) -> str:
+        self.fake_g2engine(json_data, flags)
         return "string"
 
     def stats(self, *args: Any, **kwargs: Any) -> str:
-        self.fake_g2engine()
-        return "string"
+        result = self.library_handle.G2_stats_helper()
+        try:
+            if result.return_code != 0:
+                raise self.new_exception(4066, result.return_code)
+            result_response = as_python_str(result.response)
+        finally:
+            self.library_handle.G2GoHelper_free(result.response)
+        return result_response
 
+    # FIXME This should be going away in V4?
     def why_entities_v2(
-        self, entity_id_1: int, entity_id_2: int, flags: int, *args: Any, **kwargs: Any
+        self,
+        entity_id_1: int,
+        entity_id_2: int,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
     ) -> str:
         self.fake_g2engine(entity_id_1, entity_id_2, flags)
         return "string"
 
     def why_entities(
-        self, entity_id_1: int, entity_id_2: int, *args: Any, **kwargs: Any
+        self,
+        entity_id_1: int,
+        entity_id_2: int,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
     ) -> str:
-        self.fake_g2engine(entity_id_1, entity_id_2)
+        self.fake_g2engine(entity_id_1, entity_id_2, flags)
         return "string"
 
+    # FIXME This should be going away in V4?
     def why_entity_by_entity_id_v2(
-        self, entity_id: str, flags: int, *args: Any, **kwargs: Any
+        self,
+        entity_id: str,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
     ) -> str:
         self.fake_g2engine(entity_id, flags)
         return "string"
 
-    def why_entity_by_entity_id(self, entity_id: int, *args: Any, **kwargs: Any) -> str:
-        self.fake_g2engine(entity_id)
+    def why_entity_by_entity_id(
+        self,
+        entity_id: int,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
+    ) -> str:
+        self.fake_g2engine(entity_id, flags)
         return "string"
 
+    # FIXME This should be going away in V4?
     def why_entity_by_record_id_v2(
         self,
         data_source_code: str,
         record_id: str,
-        flags: int,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1508,18 +1798,24 @@ class G2Engine(G2EngineAbstract):
         return "string"
 
     def why_entity_by_record_id(
-        self, data_source_code: str, record_id: str, *args: Any, **kwargs: Any
+        self,
+        data_source_code: str,
+        record_id: str,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
+        *args: Any,
+        **kwargs: Any,
     ) -> str:
-        self.fake_g2engine(data_source_code, record_id)
+        self.fake_g2engine(data_source_code, record_id, flags)
         return "string"
 
+    # FIXME This should be going away in V4?
     def why_records_v2(
         self,
         data_source_code_1: str,
         record_id_1: str,
         data_source_code_2: str,
         record_id_2: str,
-        flags: int,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
@@ -1534,10 +1830,11 @@ class G2Engine(G2EngineAbstract):
         record_id_1: str,
         data_source_code_2: str,
         record_id_2: str,
+        flags: int = G2EngineFlags.G2_WHY_ENTITY_DEFAULT_FLAGS,
         *args: Any,
         **kwargs: Any,
     ) -> str:
         self.fake_g2engine(
-            data_source_code_1, record_id_1, data_source_code_2, record_id_2
+            data_source_code_1, record_id_1, data_source_code_2, record_id_2, flags
         )
         return "string"

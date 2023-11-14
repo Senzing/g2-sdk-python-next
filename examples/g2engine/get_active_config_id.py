@@ -13,20 +13,13 @@ ini_params_dict = {
     },
     "SQL": {"CONNECTION": "sqlite3://na:na@/tmp/sqlite/G2C.db"},
 }
+# Const should be at top
+# TODO Change this to use truthset data?
 MODULE_NAME = "Example"
-
-# Example 1
 
 try:
     g2_engine = g2engine.G2Engine(MODULE_NAME, json.dumps(ini_params_dict))
-except G2Exception as err:
-    print(err)
-
-# Example 2
-
-try:
-    g2_engine = g2engine.G2Engine()
-    g2_engine.init(MODULE_NAME, json.dumps(ini_params_dict))
-    g2_engine.destroy()
+    result = g2_engine.get_active_config_id()
+    print(result)
 except G2Exception as err:
     print(err)

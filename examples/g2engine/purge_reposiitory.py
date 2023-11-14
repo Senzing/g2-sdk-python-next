@@ -15,18 +15,8 @@ ini_params_dict = {
 }
 MODULE_NAME = "Example"
 
-# Example 1
-
 try:
     g2_engine = g2engine.G2Engine(MODULE_NAME, json.dumps(ini_params_dict))
-except G2Exception as err:
-    print(err)
-
-# Example 2
-
-try:
-    g2_engine = g2engine.G2Engine()
-    g2_engine.init(MODULE_NAME, json.dumps(ini_params_dict))
-    g2_engine.destroy()
+    g2_engine.purge_repository()
 except G2Exception as err:
     print(err)
